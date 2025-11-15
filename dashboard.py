@@ -115,41 +115,6 @@ def fetch_all_leads(access_token):
         st.error(f"Error fetching leads: {e}")
         return []
 
-def fetch_leads_by_date_range(access_token, start_date, end_date):
-    """Fetch all leads and filter by date range client-side"""
-    try:
-        # Fetch all leads first
-        all_leads = fetch_all_leads(access_token)
-        
-        if not all_leads:
-            return []
-        
-        # Filter leads by date range
-        filtered_leads = []
-        start_datetime = datetime.combine(start_date, datetime.min.time())
-        end_datetime = datetime.combine(end_date, datetime.max.time())
-        
-        for lead in all_leads:
-            created_time_str = lead.get('Created_Time', '')
-            if created_time_str:
-                try:
-                    # Parse the ISO 8601 datetime
-                    created_time = datetime.fromisoformat(created_time_str.replace('Z', '+00:00'))
-                    # Convert to date for comparison
-                    created_date = created_time.date() if hasattr(created_time, 'date') else created_time
-                    
-                    if start_date <= created_date <= end_date:
-                        filtered_leads.append(lead)
-                except (ValueError, AttributeError):
-                    # If we can't parse the date, include the lead
-                    filtered_leads.append(lead)
-        
-        return filtered_leads
-    
-    except Exception as e:
-        st.warning(f"Error with date filter: {e}")
-        return fetch_all_leads(access_token)
-
 def fetch_leads_by_date_range_client(all_leads, start_date, end_date):
     """Filter leads by date range (client-side, from cached data)"""
     filtered_leads = []
@@ -170,6 +135,27 @@ def fetch_leads_by_date_range_client(all_leads, start_date, end_date):
                 filtered_leads.append(lead)
     
     return filtered_leads
+
+# --- NEW FUNCTION FOR MESSAGE GENERATION ---
+def create_message_column(df):
+    """Generates a formatted text message for each lead."""
+    def generate_message(row):
+        # Format the lead data into a clean, copy-pastable text message
+        message = (
+            f"⚡️ *NEW LEAD ASSIGNED!* ⚡️\n\n"
+            f"👤 *Name:* {row['Full Name']}\n"
+            f"🏢 *Company:* {row['Company']}\n"
+            f"📞 *Phone:* {row['Phone']}\n"
+            f"📧 *Email:* {row['Email']}\n"
+            f"🌐 *Source:* {row['Lead Source']}\n\n"
+            f"✅ *Action: Contact Immediately!* (Owner: {row['Lead Owner']})"
+        )
+        return message
+    
+    # Apply the function to each row
+    df['Shareable Message'] = df.apply(generate_message, axis=1)
+    return df
+# -------------------------------------------
 
 def process_leads_data(leads):
     """Process leads data into a DataFrame"""
@@ -237,13 +223,16 @@ def create_dashboard():
     # Sidebar for filters
     st.sidebar.markdown("## 🎯 Filters")
     
-    # Date range filter
+    # Date range filter (Updated to include "Today")
     st.sidebar.subheader("📅 Date Range")
-    date_range_option = st.sidebar.radio("Select date range:", ["This Week", "All Time", "Last 30 Days", "Last 90 Days", "Custom"], index=0)
+    date_range_option = st.sidebar.radio("Select date range:", ["Today", "This Week", "All Time", "Last 30 Days", "Last 90 Days", "Custom"], index=0)
     
     today = datetime.now().date()
     
-    if date_range_option == "This Week":
+    if date_range_option == "Today":
+        start_date = today
+        end_date = today
+    elif date_range_option == "This Week":
         # Get Monday of this week
         start_date = today - timedelta(days=today.weekday())
         end_date = today
@@ -281,10 +270,51 @@ def create_dashboard():
         
         df = process_leads_data(filtered_leads)
         
+        # --- APPLY NEW MESSAGE COLUMN ---
+        df = create_message_column(df)
+        # --------------------------------
+        
         st.sidebar.success(f"✅ Fetched {len(df)} leads from {start_date} to {end_date}\n(Total in DB: {len(all_leads)} leads)")
     
     # Display last updated time
     st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Total Leads: {len(df)}")
+    
+    
+    # --- NEW DEDICATED SECTION FOR TODAY'S LEADS AND MESSAGE ---
+    st.header("📲 Fresh Leads for Today's Follow-up")
+    st.info("The table below shows all leads created *today* for quick copying and sharing. If the table is empty, no new leads have been created today.")
+    
+    # Filter the main DataFrame to only show leads assigned to the target owner
+    # This filter ensures you only see the leads assigned to the user you need to update.
+    target_owner_name = st.text_input("Filter Leads by Assigned Owner Name:", value="New Admin Name") 
+    
+    today_leads_df = df[df['Created Time'].str.contains(str(today))] # Filter to only show today's leads
+    
+    if target_owner_name:
+        # Filter by the target owner
+        today_leads_df = today_leads_df[today_leads_df['Lead Owner'].str.contains(target_owner_name, case=False, na=False)]
+    
+    if today_leads_df.empty:
+        st.warning(f"No new leads found today assigned to '{target_owner_name}'.")
+    else:
+        st.subheader(f"{len(today_leads_df)} New Leads for '{target_owner_name}' Today")
+        
+        # Display the table with the new 'Shareable Message' column
+        st.dataframe(
+            today_leads_df[['Full Name', 'Lead Owner', 'Shareable Message']],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                'Full Name': st.column_config.TextColumn('Lead Name', width='small'),
+                'Lead Owner': st.column_config.TextColumn('Assigned To', width='small'),
+                # Configure the message column to display as a long text box for easy copying
+                'Shareable Message': st.column_config.TextColumn('SMS/WhatsApp Message (Copy)', width='large')
+            }
+        )
+    
+    st.divider()
+    # -------------------------------------------------------------
+    
     
     # Key Metrics
     col1, col2, col3, col4 = st.columns(4)
