@@ -199,6 +199,7 @@ def process_leads_data(leads):
             'Lead Source': lead.get('Lead_Source', 'No Source'),
             'Created Time': lead.get('Created_Time', 'N/A'),
             'Rating': lead.get('Rating', 'N/A')
+            , 'Description': lead.get('Description', '')
         })
     
     return pd.DataFrame(processed_leads)
