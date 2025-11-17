@@ -255,7 +255,7 @@ def generate_message_text(lead, template='lead_share', owner_name=''):
     """Generate a small outreach message for a lead."""
     name = lead.get('Full Name') or lead.get('First Name') or 'Friend'
     email = lead.get('Email', '')
-    phone = lead.get('Phone', '')
+    phone = lead.get('Mobile', '')
     company = lead.get('Company', '')
     source = lead.get('Lead Source', 'No Source')
     desc = lead.get('Description', '')
