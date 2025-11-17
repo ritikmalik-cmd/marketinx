@@ -251,7 +251,7 @@ def is_new_lead(created_dt: datetime, window: str = "today"):
     return False
 
 
-def generate_message_text(lead, template='short', owner_name=''):
+def generate_message_text(lead, template='lead_share', owner_name=''):
     """Generate a small outreach message for a lead."""
     name = lead.get('Full Name') or lead.get('First Name') or 'Friend'
     email = lead.get('Email', '')
@@ -260,7 +260,19 @@ def generate_message_text(lead, template='short', owner_name=''):
     source = lead.get('Lead Source', 'No Source')
     desc = lead.get('Description', '')
 
-    if template == 'short':
+    # 'lead_share' - exact field-only format as the user requested (no extra commentary)
+    if template == 'lead_share':
+        # Follow the exact sequence and labels the user provided
+        lines = [
+            f"Name: {name}",
+            f"Email: {email}",
+            f"Mobile: {phone}",
+            f"Company: {company}",
+            f"Description: {desc}",
+            f"Lead Source: {source}"
+        ]
+        text = "\n".join(lines)
+    elif template == 'short':
         text = f"Hi {name}, this is {owner_name} from {company}. Thanks for your interest via {source}! Can we share details on ICF certification?"
     else:
         text = (
@@ -732,7 +744,8 @@ def create_dashboard():
                     st.markdown(f"**Email:** {row.get('Email', '')}  \n**Mobile:** {row.get('Phone', '')}  \n**Company:** {row.get('Company', '')}")
                     st.markdown(f"**Description:** {row.get('Description', '')}")
                     if st.button(f"Generate message — {row.get('Full Name', '')}", key=f"msg_{row.get('ID')}"):
-                        msg = generate_message_text(row, template='short', owner_name=owner_selected)
+                        # Default to 'lead_share' format (field-only) to match the agreed sharing format
+                        msg = generate_message_text(row, template='lead_share', owner_name=owner_selected)
                         st.text_area("Generated Message", value=msg, height=200)
                         st.download_button("Download Message", data=msg, file_name=f"message_{row.get('ID')}.txt")
 
@@ -742,7 +755,7 @@ def create_dashboard():
         # Generate messages for selected leads
         st.markdown("### Bulk message generator")
         selected_for_message = st.multiselect("Select leads to message (by Full Name)", owner_df['Full Name'].tolist())
-        message_style = st.selectbox("Message style", ['short', 'detailed'])
+        message_style = st.selectbox("Message style", ['lead_share', 'short', 'detailed'], index=0)
         if st.button("Generate Messages for Selected"):
             messages = []
             for name in selected_for_message:
