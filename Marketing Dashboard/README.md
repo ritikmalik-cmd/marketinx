@@ -13,6 +13,8 @@ A comprehensive Streamlit-based analytics dashboard for Zoho CRM leads with mult
 - 📅 Date range filtering (This Week, Last 30/90 Days, All Time, Custom)
 - ⚡ Intelligent caching for 30,000+ leads
 - 🔍 Multi-dimensional filtering across all sections
+ - 🧑‍💼 Owner-specific dashboard with quick messaging for "new" leads (default view for Preeti Verma)
+ - ✍️ Add manual or example leads for after-hours processing and messaging
 
 ## Setup Instructions
 
@@ -54,6 +56,14 @@ streamlit run dashboard.py
 ```
 
 The app will be available at `http://localhost:8501`
+
+### Owner-specific Dashboard
+1. Open the "Owner Dashboard" tab.
+2. Select a Lead Owner (default is Preeti Verma if present).
+3. Use the Time window to pick: Today, Last 24 Hours, Yesterday after 6pm, or Custom range.
+4. Click "Load example leads for this owner" to add sample leads for quick testing.
+5. Use the manual lead form to add after-hours leads (local only; not pushed to Zoho).
+6. Use the Generate Messages controls to create messages for today's (or selected window's) leads — you can download messages as .txt.
 
 ---
 

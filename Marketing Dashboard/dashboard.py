@@ -76,7 +76,7 @@ def fetch_all_leads(access_token):
                 "per_page": 200,
                 "page": page,
                 # Only fetch the fields we need to reduce payload
-                "fields": "id,First_Name,Last_Name,Email,Phone,Company,Owner,Lead_Status,Lead_Source,Created_Time,Rating"
+                "fields": "id,First_Name,Last_Name,Email,Phone,Company,Owner,Lead_Status,Lead_Source,Created_Time,Rating,Description"
             }
             
             response = requests.get(url, headers=headers, params=params)
@@ -208,6 +208,68 @@ def get_most_common(x):
     vc = x.value_counts()
     return vc.index[0] if len(vc) > 0 else 'N/A'
 
+
+def parse_created_time(created_time_str):
+    """Parse Zoho created time string to datetime (UTC-aware where possible)"""
+    if not created_time_str:
+        return None
+    try:
+        return datetime.fromisoformat(created_time_str.replace('Z', '+00:00'))
+    except Exception:
+        try:
+            return datetime.strptime(created_time_str, "%Y-%m-%dT%H:%M:%S%z")
+        except Exception:
+            try:
+                return datetime.fromisoformat(created_time_str)
+            except Exception:
+                return None
+
+
+def is_new_lead(created_dt: datetime, window: str = "today"):
+    """Return True if lead is considered new according to window:
+    - 'today' => created_date == today
+    - 'last_24' => created_dt >= now - 24 hours
+    - 'yesterday_after_6pm' => created between yesterday 18:00 and today 00:00
+    - 'custom' handled outside
+    """
+    if created_dt is None:
+        return False
+
+    now = datetime.now(tz=created_dt.tzinfo) if created_dt.tzinfo else datetime.now()
+
+    if window == "today":
+        return created_dt.date() == now.date()
+    if window == "last_24":
+        return created_dt >= (now - timedelta(hours=24))
+    if window == "yesterday_after_6pm":
+        yesterday = (now - timedelta(days=1)).date()
+        start = datetime.combine(yesterday, datetime.min.time()) + timedelta(hours=18)
+        end = datetime.combine(yesterday, datetime.max.time())
+        return start <= created_dt <= end
+
+    return False
+
+
+def generate_message_text(lead, template='short', owner_name=''):
+    """Generate a small outreach message for a lead."""
+    name = lead.get('Full Name') or lead.get('First Name') or 'Friend'
+    email = lead.get('Email', '')
+    phone = lead.get('Phone', '')
+    company = lead.get('Company', '')
+    source = lead.get('Lead Source', 'No Source')
+    desc = lead.get('Description', '')
+
+    if template == 'short':
+        text = f"Hi {name}, this is {owner_name} from {company}. Thanks for your interest via {source}! Can we share details on ICF certification?"
+    else:
+        text = (
+            f"Hi {name},\n\nThis is {owner_name} from {company}. Thank you for reaching out through {source}. "
+            f"I saw your message: '{desc}'. I'd love to share more on our ICF certification program and how it helps career progression. "
+            f"Could I schedule a 15-minute call? Reply 'Yes' with a time that suits you.\n\nCall/WhatsApp: {phone}\nEmail: {email}"
+        )
+
+    return text
+
 def create_dashboard():
     """Create the marketing dashboard"""
     st.set_page_config(page_title="Marketing Dashboard", layout="wide", initial_sidebar_state="expanded")
@@ -304,7 +366,7 @@ def create_dashboard():
     st.divider()
     
     # Create tabs for different views
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Overview", "By Lead Owner", "By Lead Status", "By Lead Source", "Data Table"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Overview", "By Lead Owner", "By Lead Status", "By Lead Source", "Data Table", "Owner Dashboard"])
     
     with tab1:
         st.subheader("📈 Dashboard Overview")
@@ -562,6 +624,131 @@ def create_dashboard():
         )
         
         st.info(f"Showing {len(filtered_df)} of {len(df)} leads")
+
+    with tab6:
+        st.subheader("👩‍💼 Owner Dashboard - Personal Leads")
+
+        # Default to Preeti Verma but allow user to switch
+        all_owners = df['Lead Owner'].unique().tolist()
+        default_owner = "Preeti Verma" if "Preeti Verma" in all_owners else (all_owners[0] if all_owners else "Unassigned")
+
+        owner_selected = st.selectbox("Select Lead Owner", all_owners, index=all_owners.tolist().index(default_owner) if default_owner in all_owners else 0)
+
+        # Time window selection for 'new leads'
+        time_window = st.radio("Time window for 'new' leads:", ["today", "last_24", "yesterday_after_6pm", "custom"], index=0)
+
+        if time_window == "custom":
+            c1, c2 = st.columns(2)
+            with c1:
+                custom_start = st.date_input("Custom start date", today - timedelta(days=1))
+            with c2:
+                custom_end = st.date_input("Custom end date", today)
+
+        # Manual lead addition form (for after-hours leads)
+        st.markdown("**Add manual lead for this owner (temporary)**")
+        with st.form(key="manual_lead_form"):
+            m_name = st.text_input("Name")
+            m_email = st.text_input("Email")
+            m_phone = st.text_input("Mobile")
+            m_company = st.text_input("Company")
+            m_desc = st.text_area("Description")
+            m_source = st.text_input("Lead Source", value="Form Submission")
+            manual_submit = st.form_submit_button("Add Lead")
+
+        if 'manual_leads' not in st.session_state:
+            st.session_state['manual_leads'] = []
+
+        if manual_submit:
+            new_lead = {
+                'ID': f"manual-{len(st.session_state['manual_leads'])+1}",
+                'First Name': m_name.split()[0] if m_name else '',
+                'Last Name': ' '.join(m_name.split()[1:]) if len(m_name.split())>1 else '',
+                'Full Name': m_name or '',
+                'Email': m_email,
+                'Phone': m_phone,
+                'Company': m_company,
+                'Lead Owner': owner_selected,
+                'Lead Status': 'New',
+                'Lead Source': m_source,
+                'Created Time': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+                'Rating': 'N/A',
+                'Description': m_desc
+            }
+            st.session_state['manual_leads'].append(new_lead)
+            st.success("Manual lead added (local only). Use refresh to see updates.")
+
+        if st.button("Load example leads for this owner"):
+            example_leads = [
+                {'ID': 'example-1', 'Full Name': 'Mahathi G', 'Email': 'Herharmonysecret@gmail.com', 'Phone': '(934) 266-1230', 'Company': 'The PowerLeaders club', 'Lead Owner': owner_selected, 'Lead Status': 'New', 'Lead Source': 'Form Submission', 'Created Time': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'), 'Description': 'I want to know more about the icf certification'},
+                {'ID': 'example-2', 'Full Name': 'Pranil Patekar', 'Email': 'psp.4691@gmail.com', 'Phone': '919619648511', 'Company': '', 'Lead Owner': owner_selected, 'Lead Status': 'New', 'Lead Source': 'Google Ads 2025', 'Created Time': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'), 'Description': ''},
+                {'ID': 'example-3', 'Full Name': 'Sonal Agarwal', 'Email': 'sonal.agarwal66@yahoo.co.in', 'Phone': '(971) 127-1063', 'Company': '', 'Lead Owner': owner_selected, 'Lead Status': 'New', 'Lead Source': 'Google Ads 2025', 'Created Time': (datetime.now() - timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%S'), 'Description': ''}
+            ]
+            st.session_state['manual_leads'].extend(example_leads)
+            st.success("Example leads loaded locally. Scroll up to view them.")
+
+        # Force refresh action to re-fetch leads from API
+        if st.button("🔁 Refresh leads from Zoho (force)"):
+            # Bypass cache by passing unique param
+            all_leads = fetch_all_leads_cached(datetime.now())
+            df = process_leads_data(fetch_leads_by_date_range_client(all_leads, start_date, end_date))
+            st.experimental_rerun()
+
+        # Filter by owner
+        owner_df = df[df['Lead Owner'] == owner_selected].copy()
+
+        # Append manual leads for this owner
+        if st.session_state['manual_leads']:
+            manual_owner = pd.DataFrame(st.session_state['manual_leads'])
+            owner_df = pd.concat([manual_owner, owner_df], ignore_index=True, sort=False)
+
+        # Identify new leads
+        new_mask = []
+        for _, r in owner_df.iterrows():
+            cdt = parse_created_time(r.get('Created Time', ''))
+            if time_window == 'custom':
+                # use date selection
+                if not cdt:
+                    new_mask.append(False)
+                else:
+                    new_mask.append(custom_start <= cdt.date() <= custom_end)
+            else:
+                new_mask.append(is_new_lead(cdt, time_window))
+
+        owner_df['Is New'] = new_mask
+
+        st.markdown(f"### Leads for {owner_selected} (Total: {len(owner_df)})")
+
+        # Show new leads first
+        new_leads_df = owner_df[owner_df['Is New']].sort_values(by='Created Time', ascending=False)
+        old_leads_df = owner_df[~owner_df['Is New']].sort_values(by='Created Time', ascending=False)
+
+        if not new_leads_df.empty:
+            st.markdown("#### 🔥 New Leads")
+            for _, row in new_leads_df.iterrows():
+                with st.expander(f"{row.get('Full Name', 'No Name')} — {row.get('Lead Source', '')}"):
+                    st.markdown(f"**Email:** {row.get('Email', '')}  \n**Mobile:** {row.get('Phone', '')}  \n**Company:** {row.get('Company', '')}")
+                    st.markdown(f"**Description:** {row.get('Description', '')}")
+                    if st.button(f"Generate message — {row.get('Full Name', '')}", key=f"msg_{row.get('ID')}"):
+                        msg = generate_message_text(row, template='short', owner_name=owner_selected)
+                        st.text_area("Generated Message", value=msg, height=200)
+                        st.download_button("Download Message", data=msg, file_name=f"message_{row.get('ID')}.txt")
+
+        st.markdown("#### All Leads")
+        st.dataframe(owner_df[['Full Name', 'Email', 'Phone', 'Company', 'Lead Source', 'Lead Status', 'Created Time', 'Is New']])
+
+        # Generate messages for selected leads
+        st.markdown("### Bulk message generator")
+        selected_for_message = st.multiselect("Select leads to message (by Full Name)", owner_df['Full Name'].tolist())
+        message_style = st.selectbox("Message style", ['short', 'detailed'])
+        if st.button("Generate Messages for Selected"):
+            messages = []
+            for name in selected_for_message:
+                lead_row = owner_df[owner_df['Full Name'] == name].iloc[0]
+                messages.append(generate_message_text(lead_row, template=message_style, owner_name=owner_selected))
+
+            all_text = "\n\n---\n\n".join(messages)
+            st.text_area("Generated Messages", value=all_text, height=300)
+            st.download_button("Download All Messages", data=all_text, file_name=f"messages_{owner_selected.replace(' ','_')}.txt")
 
 if __name__ == "__main__":
     create_dashboard()
