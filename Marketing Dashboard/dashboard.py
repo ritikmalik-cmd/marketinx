@@ -633,7 +633,9 @@ def create_dashboard():
         all_owners = df['Lead Owner'].unique().tolist()
         default_owner = "Preeti Verma" if "Preeti Verma" in all_owners else (all_owners[0] if all_owners else "Unassigned")
 
-        owner_selected = st.selectbox("Select Lead Owner", all_owners, index=all_owners.tolist().index(default_owner) if default_owner in all_owners else 0)
+        # `all_owners` is a Python list; use list.index() instead of .tolist()
+        owner_index = all_owners.index(default_owner) if default_owner in all_owners else 0
+        owner_selected = st.selectbox("Select Lead Owner", all_owners, index=owner_index)
 
         # Time window selection for 'new leads'
         time_window = st.radio("Time window for 'new' leads:", ["today", "last_24", "yesterday_after_6pm", "custom"], index=0)
