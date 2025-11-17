@@ -76,7 +76,7 @@ def fetch_all_leads(access_token):
                 "per_page": 200,
                 "page": page,
                 # Only fetch the fields we need to reduce payload
-                "fields": "id,First_Name,Last_Name,Email,Phone,Company,Owner,Lead_Status,Lead_Source,Created_Time,Rating,Description"
+                "fields": "id,First_Name,Last_Name,Email,Mobile,Company,Owner,Lead_Status,Lead_Source,Created_Time,Rating,Description"
             }
             
             response = requests.get(url, headers=headers, params=params)
@@ -192,7 +192,7 @@ def process_leads_data(leads):
             'Last Name': lead.get('Last_Name', ''),
             'Full Name': f"{lead.get('First_Name', '')} {lead.get('Last_Name', '')}".strip(),
             'Email': lead.get('Email', 'N/A'),
-            'Phone': lead.get('Phone', 'N/A'),
+            'Mobile': lead.get('Mobile', 'N/A'),
             'Company': lead.get('Company', 'N/A'),
             'Lead Owner': lead_owner_name,
             'Lead Status': lead.get('Lead_Status', 'No Status'),
@@ -255,7 +255,7 @@ def generate_message_text(lead, template='lead_share', owner_name=''):
     """Generate a small outreach message for a lead."""
     name = lead.get('Full Name') or lead.get('First Name') or 'Friend'
     email = lead.get('Email', '')
-    phone = lead.get('Mobile', '')
+    Mobile = lead.get('Mobile', '')
     company = lead.get('Company', '')
     source = lead.get('Lead Source', 'No Source')
     desc = lead.get('Description', '')
@@ -266,7 +266,7 @@ def generate_message_text(lead, template='lead_share', owner_name=''):
         lines = [
             f"Name: {name}",
             f"Email: {email}",
-            f"Mobile: {phone}",
+            f"Mobile: {Mobile}",
             f"Company: {company}",
             f"Description: {desc}",
             f"Lead Source: {source}"
@@ -278,7 +278,7 @@ def generate_message_text(lead, template='lead_share', owner_name=''):
         text = (
             f"Hi {name},\n\nThis is {owner_name} from {company}. Thank you for reaching out through {source}. "
             f"I saw your message: '{desc}'. I'd love to share more on our ICF certification program and how it helps career progression. "
-            f"Could I schedule a 15-minute call? Reply 'Yes' with a time that suits you.\n\nCall/WhatsApp: {phone}\nEmail: {email}"
+            f"Could I schedule a 15-minute call? Reply 'Yes' with a time that suits you.\n\nCall/WhatsApp: {Mobile}\nEmail: {email}"
         )
 
     return text
@@ -664,7 +664,7 @@ def create_dashboard():
         with st.form(key="manual_lead_form"):
             m_name = st.text_input("Name")
             m_email = st.text_input("Email")
-            m_phone = st.text_input("Mobile")
+            m_Mobile = st.text_input("Mobile")
             m_company = st.text_input("Company")
             m_desc = st.text_area("Description")
             m_source = st.text_input("Lead Source", value="Form Submission")
@@ -680,7 +680,7 @@ def create_dashboard():
                 'Last Name': ' '.join(m_name.split()[1:]) if len(m_name.split())>1 else '',
                 'Full Name': m_name or '',
                 'Email': m_email,
-                'Phone': m_phone,
+                'Mobile': m_mobile,
                 'Company': m_company,
                 'Lead Owner': owner_selected,
                 'Lead Status': 'New',
@@ -694,9 +694,9 @@ def create_dashboard():
 
         if st.button("Load example leads for this owner"):
             example_leads = [
-                {'ID': 'example-1', 'Full Name': 'Mahathi G', 'Email': 'Herharmonysecret@gmail.com', 'Phone': '(934) 266-1230', 'Company': 'The PowerLeaders club', 'Lead Owner': owner_selected, 'Lead Status': 'New', 'Lead Source': 'Form Submission', 'Created Time': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'), 'Description': 'I want to know more about the icf certification'},
-                {'ID': 'example-2', 'Full Name': 'Pranil Patekar', 'Email': 'psp.4691@gmail.com', 'Phone': '919619648511', 'Company': '', 'Lead Owner': owner_selected, 'Lead Status': 'New', 'Lead Source': 'Google Ads 2025', 'Created Time': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'), 'Description': ''},
-                {'ID': 'example-3', 'Full Name': 'Sonal Agarwal', 'Email': 'sonal.agarwal66@yahoo.co.in', 'Phone': '(971) 127-1063', 'Company': '', 'Lead Owner': owner_selected, 'Lead Status': 'New', 'Lead Source': 'Google Ads 2025', 'Created Time': (datetime.now() - timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%S'), 'Description': ''}
+                {'ID': 'example-1', 'Full Name': 'Mahathi G', 'Email': 'Herharmonysecret@gmail.com', 'Mobile': '(934) 266-1230', 'Company': 'The PowerLeaders club', 'Lead Owner': owner_selected, 'Lead Status': 'New', 'Lead Source': 'Form Submission', 'Created Time': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'), 'Description': 'I want to know more about the icf certification'},
+                {'ID': 'example-2', 'Full Name': 'Pranil Patekar', 'Email': 'psp.4691@gmail.com', 'Mobile': '919619648511', 'Company': '', 'Lead Owner': owner_selected, 'Lead Status': 'New', 'Lead Source': 'Google Ads 2025', 'Created Time': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'), 'Description': ''},
+                {'ID': 'example-3', 'Full Name': 'Sonal Agarwal', 'Email': 'sonal.agarwal66@yahoo.co.in', 'Mobile': '(971) 127-1063', 'Company': '', 'Lead Owner': owner_selected, 'Lead Status': 'New', 'Lead Source': 'Google Ads 2025', 'Created Time': (datetime.now() - timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%S'), 'Description': ''}
             ]
             st.session_state['manual_leads'].extend(example_leads)
             st.success("Example leads loaded locally. Scroll up to view them.")
@@ -741,7 +741,7 @@ def create_dashboard():
             st.markdown("#### 🔥 New Leads")
             for _, row in new_leads_df.iterrows():
                 with st.expander(f"{row.get('Full Name', 'No Name')} — {row.get('Lead Source', '')}"):
-                    st.markdown(f"**Email:** {row.get('Email', '')}  \n**Mobile:** {row.get('Phone', '')}  \n**Company:** {row.get('Company', '')}")
+                    st.markdown(f"**Email:** {row.get('Email', '')}  \n**Mobile:** {row.get('Mobile', '')}  \n**Company:** {row.get('Company', '')}")
                     st.markdown(f"**Description:** {row.get('Description', '')}")
                     if st.button(f"Generate message — {row.get('Full Name', '')}", key=f"msg_{row.get('ID')}"):
                         # Default to 'lead_share' format (field-only) to match the agreed sharing format
@@ -750,7 +750,7 @@ def create_dashboard():
                         st.download_button("Download Message", data=msg, file_name=f"message_{row.get('ID')}.txt")
 
         st.markdown("#### All Leads")
-        st.dataframe(owner_df[['Full Name', 'Email', 'Phone', 'Company', 'Lead Source', 'Lead Status', 'Created Time', 'Is New']])
+        st.dataframe(owner_df[['Full Name', 'Email', 'Mobile', 'Company', 'Lead Source', 'Lead Status', 'Created Time', 'Is New']])
 
         # Generate messages for selected leads
         st.markdown("### Bulk message generator")
